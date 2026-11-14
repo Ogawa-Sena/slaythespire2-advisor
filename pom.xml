@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  pom.xml：Maven（ビルドツール）の設定ファイル。
+  ・このプロジェクトの名前と Java のバージョン
+  ・使う外部ライブラリ（自動でダウンロードされる）
+  ・「mvn exec:java」で実行するときに最初に動かすクラス
+  を書いておく場所です。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- プロジェクトの識別名（自分用なので適当な名前でよい） -->
+    <groupId>sts2advisor</groupId>
+    <artifactId>sts2-advisor</artifactId>
+    <version>0.1.0</version>
+
+    <properties>
+        <!-- Java 21 でコンパイルする -->
+        <maven.compiler.release>21</maven.compiler.release>
+        <!-- ソースコードの文字コード（日本語コメントが文字化けしないように UTF-8） -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- 「mvn exec:java」で最初に動かすクラス（何も指定しなければカードデータの取り込み）。
+             別のクラスを動かすときは -Dexec.mainClass=クラス名 で上書きできる -->
+        <exec.mainClass>sts2advisor.ImportCardsMain</exec.mainClass>
+    </properties>
+
+    <dependencies>
+        <!-- SQLite データベースを Java から使うためのライブラリ -->
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.53.4.0</version>
+        </dependency>
+        <!-- JSON（APIから返ってくるデータの形式）を読むためのライブラリ -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.14.0</version>
+        </dependency>
+        <!-- WebP 形式の画像を読むためのライブラリ（ゲームファイルのポーションのアイコンが WebP のため） -->
+        <dependency>
+            <groupId>com.twelvemonkeys.imageio</groupId>
+            <artifactId>imageio-webp</artifactId>
+            <version>3.12.0</version>
+        </dependency>
+        <!-- Windows の機能を Java から呼ぶためのライブラリ（ゲームのウィンドウがどのモニターにあるかを調べるため。
+             ウィンドウの位置を読むだけで、ゲームの操作はしない） -->
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna-platform</artifactId>
+            <version>5.14.0</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 「mvn compile exec:java」でプログラムを実行できるようにする -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.6.4</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>
