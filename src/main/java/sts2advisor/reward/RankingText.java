@@ -52,7 +52,7 @@ public final class RankingText {
 
     /**
      * 選択肢1つ分の説明を作ります。
-     * 例："輝き　コモンの中で上位 20%（勝率の上がり幅 -1.4 / 12,532件、Codex ティアC）｜Metabot 上位12%（ティアB）"
+     * 例："輝き　コモンの中で上位 20%（勝率の上がり幅 -1.4 / 12,532件・v0.111.0、Codex ティアC）｜Metabot 上位12%（ティアB）"
      *
      * @param o 選択肢
      * @return 説明の文字
@@ -70,8 +70,9 @@ public final class RankingText {
             // 点数は「下から何%か」なので、見やすいように「上位何%か」に直して表示する
             int top = Math.max(1, (int) Math.round(100 - o.statOnlyScore()));
             text.append("　").append(rarityLabel(o.codex().rarity())).append("の中で上位 ").append(top).append("%");
-            text.append(String.format("（勝率の上がり幅 %+.1f / %,d件、Codex ティア%s）",
-                    o.codex().lift(), o.codex().liftN(), o.codex().tier()));
+            // どのパッチの統計かも出す（2026-11-19：新しいパッチの件数が足りないカードは、前のパッチの統計で補うため）
+            text.append(String.format("（勝率の上がり幅 %+.1f / %,d件・%s、Codex ティア%s）",
+                    o.codex().lift(), o.codex().liftN(), o.codex().patch(), o.codex().tier()));
         }
         if (o.metabotTopPercent() != null) {
             text.append("｜Metabot 上位").append(o.metabotTopPercent()).append("%（ティア")

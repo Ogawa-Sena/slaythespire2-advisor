@@ -13,6 +13,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -269,32 +270,40 @@ public class CardDatabase implements AutoCloseable {
                             String tier, String patch, String rarity) {
     }
 
+    /** 新しいパッチの統計を使うのに必要な、勝率の上がり幅の件数（これより少なければ前のパッチの統計で補う。2026-11-19 追加） */
+    static final int MIN_LIFT_N_FOR_NEWER_PATCH = 100;
+
     /**
-     * Spire Codex の統計を、キャラとアセンション区分を指定して読みます（いちばん新しいパッチのもの）。
+     * Spire Codex の統計を、キャラとアセンション区分を指定して読みます。
+     *
+     * パッチが複数入っているときは、カードごとに次の順で1つ選びます（2026-11-19 変更。ユーザーと決定）。
+     *   1. 勝率の上がり幅の件数が MIN_LIFT_N_FOR_NEWER_PATCH 以上ある、いちばん新しいパッチの統計
+     *   2. 1 が無ければ、勝率の上がり幅があるもののうち、件数がいちばん多いパッチの統計（前のパッチで補う）
+     *   3. どれにも勝率の上がり幅が無ければ、いちばん新しいパッチの統計
+     * 出たばかりのパッチは件数が少なく、新しいパッチだけを使うと多くのカードが「データ不足」になるため。
      *
      * @param character      キャラ（例："DEFECT"）
      * @param ascensionGroup アセンション区分（"all" か "a10"）
-     * @return 「カードID → 統計」の対応
+     * @return 「カードID → 統計」の対応（統計の patch に、どのパッチの数字を使ったかが入る）
      * @throws SQLException 読み出しに失敗したとき
      */
     public Map<String, CodexStat> findCodexStats(String character, String ascensionGroup) throws SQLException {
-        // パッチが複数あるときは、いちばん新しく取り込んだもの（fetched_at が最大）を使う。
+        // 新しく取り込んだ順（fetched_at の大きい順）にすべてのパッチの統計を読む。
         // 同じレアリティの中で比べるため、cards 表からレアリティも一緒に読む
         String sql = """
                 SELECT s.card_id, s.lift, s.lift_n, s.win_rate, s.pick_rate, s.tier, s.patch, c.rarity
                 FROM card_stats s LEFT JOIN cards c ON c.card_id = s.card_id
                 WHERE s.character = ? AND s.ascension_group = ?
-                  AND s.fetched_at = (SELECT MAX(fetched_at) FROM card_stats WHERE character = ? AND ascension_group = ?)
+                ORDER BY s.fetched_at DESC
                 """;
-        Map<String, CodexStat> stats = new LinkedHashMap<>();
+        // カードID → そのカードの統計（新しい順）
+        Map<String, List<CodexStat>> byCard = new LinkedHashMap<>();
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, character);
             ps.setString(2, ascensionGroup);
-            ps.setString(3, character);
-            ps.setString(4, ascensionGroup);
             try (ResultSet r = ps.executeQuery()) {
                 while (r.next()) {
-                    stats.put(r.getString("card_id"), new CodexStat(
+                    byCard.computeIfAbsent(r.getString("card_id"), k -> new ArrayList<>()).add(new CodexStat(
                             r.getString("card_id"),
                             nullableDouble(r, "lift"),
                             nullableInt(r, "lift_n"),
@@ -306,7 +315,33 @@ public class CardDatabase implements AutoCloseable {
                 }
             }
         }
+        Map<String, CodexStat> stats = new LinkedHashMap<>();
+        byCard.forEach((cardId, rows) -> stats.put(cardId, chooseStat(rows)));
         return stats;
+    }
+
+    /**
+     * 1枚のカードの、パッチごとの統計（新しい順）から、使う統計を1つ選びます（選び方は findCodexStats の説明のとおり）。
+     *
+     * @param rows そのカードの統計（新しく取り込んだ順。1つ以上）
+     * @return 使う統計
+     */
+    static CodexStat chooseStat(List<CodexStat> rows) {
+        // 1. 件数が十分ある、いちばん新しいパッチ
+        for (CodexStat s : rows) {
+            if (s.lift() != null && s.liftN() != null && s.liftN() >= MIN_LIFT_N_FOR_NEWER_PATCH) {
+                return s;
+            }
+        }
+        // 2. 勝率の上がり幅があるもののうち、件数がいちばん多いもの
+        CodexStat most = null;
+        for (CodexStat s : rows) {
+            if (s.lift() != null && s.liftN() != null && (most == null || s.liftN() > most.liftN())) {
+                most = s;
+            }
+        }
+        // 3. どれにも無ければ、いちばん新しいもの
+        return most != null ? most : rows.get(0);
     }
 
     /**
